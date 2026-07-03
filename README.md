@@ -98,10 +98,10 @@ bun run build:release:all      # all release assets
 bun run build:release -- linux-x64
 ```
 
-Release from CI by merging the release-please PR, then pushing the version tag:
+Releases are automatic on `main`. Use Conventional Commits:
 
-```sh
-version=$(bun -p 'require("./package.json").version')
-git tag "v$version"
-git push origin "v$version"
-```
+- `fix:` / `perf:` → patch
+- `feat:` → minor
+- `BREAKING CHANGE:` or `!` → major
+
+After tests pass, semantic-release bumps `package.json` and `herdr-plugin.toml`, updates `CHANGELOG.md`, tags `vX.Y.Z`, creates the GitHub Release, and uploads binaries.
