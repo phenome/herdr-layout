@@ -1,0 +1,31 @@
+id = "herdr-layout"
+name = "Herdr Layout"
+version = "0.0.1"
+min_herdr_version = "0.7.0"
+platforms = ["windows", "macos", "linux"]
+
+[[build]]
+command = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "scripts/install.ps1"]
+platforms = ["windows"]
+
+[[build]]
+command = ["sh", "scripts/install.sh"]
+platforms = ["macos", "linux"]
+
+[[actions]]
+id = "apply-1"
+title = "Apply Layout 1"
+contexts = ["workspace"]
+command = ["bin/herdr-layout", "1"]
+
+[[actions]]
+id = "apply-2"
+title = "Apply Layout 2"
+contexts = ["workspace"]
+command = ["bin/herdr-layout", "2"]
+
+[[actions]]
+id = "apply-3"
+title = "Apply Layout 3"
+contexts = ["workspace"]
+command = ["bin/herdr-layout", "3"]
