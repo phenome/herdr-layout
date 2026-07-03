@@ -46,6 +46,7 @@ export type Snapshot = {
 export type Operation =
   | { type: "already-running"; label: string; paneId: string; tabId: string }
   | { type: "run-existing"; target: LayoutTarget; paneId: string; tabId: string }
+  | { type: "rename-current"; target: LayoutTarget; paneId: string; tabId: string }
   | { type: "claim-current"; target: LayoutTarget; paneId: string; tabId: string }
   | { type: "create-tab"; target: LayoutTarget };
 
@@ -243,18 +244,28 @@ export function planLayout(layout: Layout, snapshot: Snapshot): Operation[] {
   const operations: Operation[] = [];
 
   for (const [index, target] of layout.tabs.entries()) {
-    if (index === 0 && layout.firstUsesCurrentTab && snapshot.currentPane && isIdle(snapshot.currentPane, snapshot.processes)) {
-      const planned = planTarget(target, tabs, snapshot.panes, snapshot.processes, assigned);
-      if (planned.type !== "create-tab") {
-        operations.push(planned);
+    if (index === 0 && layout.firstUsesCurrentTab && snapshot.currentPane) {
+      if (isTargetRunning(snapshot.currentPane, target, snapshot.processes)) {
+        assigned.add(snapshot.currentPane.pane_id);
+        const tab = tabs.find((candidate) => candidate.tab_id === snapshot.currentPane?.tab_id);
+        if (tab) tab.label = target.label;
+        operations.push({ type: "rename-current", target, paneId: snapshot.currentPane.pane_id, tabId: snapshot.currentPane.tab_id });
         continue;
       }
 
-      assigned.add(snapshot.currentPane.pane_id);
-      const tab = tabs.find((candidate) => candidate.tab_id === snapshot.currentPane?.tab_id);
-      if (tab) tab.label = target.label;
-      operations.push({ type: "claim-current", target, paneId: snapshot.currentPane.pane_id, tabId: snapshot.currentPane.tab_id });
-      continue;
+      if (isIdle(snapshot.currentPane, snapshot.processes)) {
+        const planned = planTarget(target, tabs, snapshot.panes, snapshot.processes, assigned);
+        if (planned.type !== "create-tab") {
+          operations.push(planned);
+          continue;
+        }
+
+        assigned.add(snapshot.currentPane.pane_id);
+        const tab = tabs.find((candidate) => candidate.tab_id === snapshot.currentPane?.tab_id);
+        if (tab) tab.label = target.label;
+        operations.push({ type: "claim-current", target, paneId: snapshot.currentPane.pane_id, tabId: snapshot.currentPane.tab_id });
+        continue;
+      }
     }
 
     operations.push(planTarget(target, tabs, snapshot.panes, snapshot.processes, assigned));
@@ -295,6 +306,10 @@ function planTarget(
 async function applyOperations(operations: Operation[], snapshot: Snapshot): Promise<void> {
   for (const operation of operations) {
     if (operation.type === "already-running") continue;
+    if (operation.type === "rename-current") {
+      await herdrOk(["tab", "rename", operation.tabId, operation.target.label]);
+      continue;
+    }
     if (operation.type === "claim-current") {
       await herdrOk(["tab", "rename", operation.tabId, operation.target.label]);
       await herdrOk(["pane", "run", operation.paneId, operation.target.command]);

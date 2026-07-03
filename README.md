@@ -8,9 +8,9 @@ Small Herdr plugin for three saved tab layouts.
 herdr plugin install phenome/herdr-layout
 ```
 
-Users do not need Bun. The plugin installs the `herdr-layout` release binary for version `0.0.1` from GitHub Releases.
+Users do not need Bun. The plugin installs the `herdr-layout` release binary for the version declared in `herdr-plugin.toml`.
 
-0.0.1 binaries are unsigned raw release assets. Your OS may warn before first run; only install releases you trust.
+Binaries are unsigned raw release assets. Your OS may warn before first run; only install releases you trust.
 
 ## Configure one layout
 
@@ -37,7 +37,7 @@ layouts:
 
 Each layout has:
 
-- `firstUsesCurrentTab`: `true` to reuse the current idle tab for the first target.
+- `firstUsesCurrentTab`: `true` to reuse the current tab for the first target when it is idle or already running that target.
 - `tabs`: non-empty list of tab targets.
 - `label`: Herdr tab label to reuse or create.
 - `command`: shell-line string Herdr runs in that tab.
@@ -98,9 +98,10 @@ bun run build:release:all      # all release assets
 bun run build:release -- linux-x64
 ```
 
-Release from CI by pushing a version tag:
+Release from CI by merging the release-please PR, then pushing the version tag:
 
 ```sh
-git tag v0.0.1
-git push origin v0.0.1
+version=$(bun -p 'require("./package.json").version')
+git tag "v$version"
+git push origin "v$version"
 ```

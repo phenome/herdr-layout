@@ -103,6 +103,18 @@ describe("runtime planning helpers", () => {
     ).toEqual([{ type: "already-running", label: "api", paneId: "p-existing", tabId: "t-existing" }]);
   });
 
+  test("firstUsesCurrentTab renames and reuses current pane when first target is already running there", () => {
+    const desired = target("agent", "omp");
+    const current = pane("p-current", "t-current");
+
+    expect(
+      planLayout(
+        { firstUsesCurrentTab: true, tabs: [desired] },
+        snapshot([tab("t-current", "1")], [current], processes(["p-current", [{ name: "omp" }]]), current),
+      ),
+    ).toEqual([{ type: "rename-current", target: desired, paneId: "p-current", tabId: "t-current" }]);
+  });
+
   test("duplicate target tabs prefer a running pane, then first idle pane, and throw when neither exists", () => {
     const desired = target("api", "api --serve");
     const tabs = [tab("t-idle", "api"), tab("t-running", "api")];
