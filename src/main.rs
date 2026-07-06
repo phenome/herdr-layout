@@ -6,6 +6,8 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::thread;
+use std::time::Duration;
 
 pub type AppResult<T, E = String> = std::result::Result<T, E>;
 
@@ -14,6 +16,8 @@ type LayoutMap = HashMap<Slot, Layout>;
 
 const USAGE: &str = "usage: herdr-layout <1|2|3> | --dry-run <1|2|3> | --check-config <1|2|3>";
 const SHELLS: &[&str] = &["pwsh", "powershell", "cmd", "zsh", "bash", "fish", "nu", "sh"];
+const HERDR_RETRIES: usize = 3;
+const HERDR_RETRY_MS: u64 = 100;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct LayoutTarget {
@@ -564,29 +568,45 @@ pub fn herdr_ok(args: &[&str]) -> AppResult<()> {
 fn herdr(args: &[&str], expect_json: bool) -> AppResult<String> {
     let bin = env::var("HERDR_BIN_PATH").unwrap_or_else(|_| "herdr".to_string());
     let command = format!("herdr {}", args.join(" "));
-    let output = match Command::new(&bin).args(args).output() {
-        Ok(output) => output,
-        Err(error) => {
-            let message = format!("{command} failed to start: {error}");
+    for attempt in 0..=HERDR_RETRIES {
+        let output = match Command::new(&bin).args(args).output() {
+            Ok(output) => output,
+            Err(error) => {
+                let message = format!("{command} failed to start: {error}");
+                if attempt < HERDR_RETRIES && message.contains("BrokenPipe") {
+                    thread::sleep(Duration::from_millis(HERDR_RETRY_MS));
+                    continue;
+                }
+                log_line(&message);
+                return Err(message);
+            }
+        };
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        if should_retry_herdr_output(output.status.success(), expect_json, &stdout, &stderr) && attempt < HERDR_RETRIES {
+            thread::sleep(Duration::from_millis(HERDR_RETRY_MS));
+            continue;
+        }
+        if !output.status.success() {
+            let fallback = format!("{command} failed with exit {}", output.status.code().unwrap_or(-1));
+            let detail = if !stderr.is_empty() { stderr } else if !stdout.is_empty() { stdout } else { fallback };
+            let message = format!("{command}: {}", detail.trim());
             log_line(&message);
             return Err(message);
         }
-    };
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    if !output.status.success() {
-        let fallback = format!("{command} failed with exit {}", output.status.code().unwrap_or(-1));
-        let detail = if !stderr.is_empty() { stderr } else if !stdout.is_empty() { stdout } else { fallback };
-        let message = format!("{command}: {}", detail.trim());
-        log_line(&message);
-        return Err(message);
+        if expect_json && stdout.trim().is_empty() {
+            let message = format!("{command} returned empty output");
+            log_line(&message);
+            return Err(message);
+        }
+        return Ok(stdout);
     }
-    if expect_json && stdout.trim().is_empty() {
-        let message = format!("{command} returned empty output");
-        log_line(&message);
-        return Err(message);
-    }
-    Ok(stdout)
+    unreachable!("herdr retry loop returns")
+}
+
+fn should_retry_herdr_output(status_success: bool, expect_json: bool, stdout: &str, stderr: &str) -> bool {
+    (!status_success && (stderr.contains("BrokenPipe") || stdout.contains("BrokenPipe") || stderr.contains("code: 232") || stdout.contains("code: 232")))
+        || (expect_json && status_success && stdout.trim().is_empty())
 }
 
 fn log_line(message: &str) {
@@ -1029,6 +1049,7 @@ layouts:
         );
 
         assert_eq!(
+
             plan_layout(
                 &layout(vec![desired.clone()]),
                 &snapshot(
@@ -1048,5 +1069,14 @@ layouts:
         )
         .unwrap_err();
         assert!(error.contains("no matching or idle pane is available"), "{error}");
+    }
+
+    #[test]
+    fn herdr_retry_detects_pipe_failures_and_empty_json() {
+        assert!(should_retry_herdr_output(false, false, "", r#"Error: Os { code: 232, kind: BrokenPipe, message: "pipe closing" }"#));
+        assert!(should_retry_herdr_output(false, false, "BrokenPipe", ""));
+        assert!(should_retry_herdr_output(true, true, "", ""));
+        assert!(!should_retry_herdr_output(true, true, r#"{"ok":true}"#, ""));
+        assert!(!should_retry_herdr_output(false, false, "", "real error"));
     }
 }
