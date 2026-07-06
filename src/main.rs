@@ -160,6 +160,8 @@ fn run(argv: Vec<String>) -> i32 {
     let slot = match &mode {
         Mode::Apply(slot) | Mode::DryRun(slot) | Mode::CheckConfig(slot) => slot.clone(),
     };
+    let mode_name = if matches!(mode, Mode::DryRun(_)) { "dry-run" } else { "apply" };
+    log_line(&format!("{mode_name} slot {slot}; cwd {invoking_cwd}"));
 
     let (loaded, layout) = match load_config(&invoking_cwd).and_then(|loaded| {
         let layout = select_layout(&loaded.layouts, &HashMap::new(), &slot)?;
@@ -171,6 +173,7 @@ fn run(argv: Vec<String>) -> i32 {
             return 1;
         }
     };
+    log_line(&format!("loaded {} target(s) from {}", layout.tabs.len(), config_files(&loaded).join(", ")));
 
     let snapshot = match read_snapshot(&context) {
         Ok(snapshot) => snapshot,
@@ -187,6 +190,7 @@ fn run(argv: Vec<String>) -> i32 {
             return 1;
         }
     };
+    log_line(&format!("planned {} operation(s): {:?}", operations.len(), operations));
 
     if matches!(mode, Mode::DryRun(_)) {
         let out = DryRunOutput { ok: true, slot, files: config_files(&loaded), operations };
@@ -200,7 +204,10 @@ fn run(argv: Vec<String>) -> i32 {
         }
         Ok(())
     }) {
-        Ok(()) => 0,
+        Ok(()) => {
+            notify_user(&format!("Applied layout {slot}: {} operation(s)", operations.len()));
+            0
+        },
         Err(error) => {
             notify_user(&error);
             1
@@ -556,27 +563,39 @@ pub fn herdr_ok(args: &[&str]) -> AppResult<()> {
 
 fn herdr(args: &[&str], expect_json: bool) -> AppResult<String> {
     let bin = env::var("HERDR_BIN_PATH").unwrap_or_else(|_| "herdr".to_string());
-    let output = Command::new(&bin)
-        .args(args)
-        .output()
-        .map_err(|error| error.to_string())?;
+    let command = format!("herdr {}", args.join(" "));
+    let output = match Command::new(&bin).args(args).output() {
+        Ok(output) => output,
+        Err(error) => {
+            let message = format!("{command} failed to start: {error}");
+            log_line(&message);
+            return Err(message);
+        }
+    };
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
     if !output.status.success() {
-        let fallback = format!("herdr {} failed with exit {}", args.join(" "), output.status.code().unwrap_or(-1));
-        let message = if !stderr.is_empty() { stderr } else if !stdout.is_empty() { stdout } else { fallback };
-        return Err(message.trim().to_string());
+        let fallback = format!("{command} failed with exit {}", output.status.code().unwrap_or(-1));
+        let detail = if !stderr.is_empty() { stderr } else if !stdout.is_empty() { stdout } else { fallback };
+        let message = format!("{command}: {}", detail.trim());
+        log_line(&message);
+        return Err(message);
     }
     if expect_json && stdout.trim().is_empty() {
-        return Err(format!("herdr {} returned empty output", args.join(" ")));
+        let message = format!("{command} returned empty output");
+        log_line(&message);
+        return Err(message);
     }
     Ok(stdout)
 }
 
+fn log_line(message: &str) {
+    eprintln!("[herdr-layout] {message}");
+}
+
 pub fn notify_user(message: &str) {
-    if herdr_ok(&["notification", "show", "Herdr Layout", "--body", message, "--position", "top-right", "--sound", "request"]).is_err() {
-        eprintln!("{message}");
-    }
+    log_line(message);
+    let _ = herdr_ok(&["notification", "show", "Herdr Layout", "--body", message, "--position", "top-right", "--sound", "request"]);
 }
 
 fn parse_tab_list(response: &JsonValue) -> AppResult<Vec<TabInfo>> {
