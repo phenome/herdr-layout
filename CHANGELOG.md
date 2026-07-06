@@ -1,3 +1,10 @@
+## [0.1.1](https://github.com/phenome/herdr-layout/compare/v0.1.0...v0.1.1) (2026-07-06)
+
+
+### Bug Fixes
+
+* log layout action outcomes ([e4a7a11](https://github.com/phenome/herdr-layout/commit/e4a7a116d4594f37fe8b51999fe0a9ee096e1b12))
+
 # [0.1.0](https://github.com/phenome/herdr-layout/compare/v0.0.3...v0.1.0) (2026-07-06)
 
 
