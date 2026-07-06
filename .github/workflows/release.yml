@@ -20,34 +20,55 @@ jobs:
         include:
           - os: windows-latest
             target: windows-x64
+            rustTarget: x86_64-pc-windows-msvc
             asset: herdr-layout-windows-x64.exe
+            aptPackages: ""
           - os: macos-latest
             target: darwin-x64
+            rustTarget: x86_64-apple-darwin
             asset: herdr-layout-darwin-x64
+            aptPackages: ""
           - os: macos-latest
             target: darwin-arm64
+            rustTarget: aarch64-apple-darwin
             asset: herdr-layout-darwin-arm64
+            aptPackages: ""
           - os: ubuntu-latest
             target: linux-x64
+            rustTarget: x86_64-unknown-linux-gnu
             asset: herdr-layout-linux-x64
+            aptPackages: ""
           - os: ubuntu-latest
             target: linux-arm64
+            rustTarget: aarch64-unknown-linux-gnu
             asset: herdr-layout-linux-arm64
+            aptPackages: "gcc-aarch64-linux-gnu"
           - os: ubuntu-latest
             target: linux-musl-x64
+            rustTarget: x86_64-unknown-linux-musl
             asset: herdr-layout-linux-musl-x64
+            aptPackages: "musl-tools"
 
     steps:
       - uses: actions/checkout@v4
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          bun-version: 1.3.14
+          targets: ${{ matrix.rustTarget }}
 
-      - run: bun install --frozen-lockfile
-      - run: bun test
-      - run: bun run typecheck
-      - run: bun run build:release -- ${{ matrix.target }}
+      - if: runner.os == 'Linux' && matrix.aptPackages != ''
+        run: sudo apt-get update && sudo apt-get install -y ${{ matrix.aptPackages }}
+
+      - run: cargo test --locked
+      - run: cargo check --all-targets --locked
+      - run: cargo build --release --locked --target ${{ matrix.rustTarget }}
+
+      - shell: bash
+        run: |
+          mkdir -p dist
+          bin="target/${{ matrix.rustTarget }}/release/herdr-layout"
+          if [ "${{ runner.os }}" = "Windows" ]; then bin="$bin.exe"; fi
+          cp "$bin" "dist/${{ matrix.asset }}"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -72,6 +93,8 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
+
+      - uses: dtolnay/rust-toolchain@stable
 
       - run: bun install --frozen-lockfile
 

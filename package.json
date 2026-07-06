@@ -1,15 +1,11 @@
 {
   "name": "herdr-layout",
-  "version": "0.0.3",
+  "version": "0.1.0",
   "private": true,
   "license": "MIT",
-  "type": "module",
   "scripts": {
-    "test": "bun test",
-    "typecheck": "tsc --noEmit",
-    "dev": "bun src/index.ts",
-    "build:release": "bun scripts/build-release.ts",
-    "build:release:all": "bun scripts/build-release.ts --all",
+    "test": "cargo test --locked",
+    "typecheck": "cargo check --all-targets --locked",
     "semantic-release": "semantic-release"
   },
   "devDependencies": {
@@ -18,8 +14,6 @@
     "@semantic-release/git": "^10.0.1",
     "@semantic-release/github": "^12.0.9",
     "@semantic-release/npm": "^13.1.5",
-    "@types/bun": "^1.3.0",
-    "semantic-release": "^25.0.5",
-    "typescript": "^5.9.0"
+    "semantic-release": "^25.0.5"
   }
 }

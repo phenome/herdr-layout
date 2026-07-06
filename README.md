@@ -8,7 +8,7 @@ Small Herdr plugin for three saved tab layouts.
 herdr plugin install phenome/herdr-layout
 ```
 
-Users do not need Bun. The plugin installs the `herdr-layout` release binary for the version declared in `herdr-plugin.toml`.
+Users do not need Bun, Node, or Rust. The plugin installs the `herdr-layout` release binary for the version declared in `herdr-plugin.toml`.
 
 Binaries are unsigned raw release assets. Your OS may warn before first run; only install releases you trust.
 
@@ -87,16 +87,17 @@ description = "Apply layout 3"
 
 ## Development
 
-Maintainers need Bun:
+Maintainers need Bun for release tooling and Cargo for the runtime:
 
 ```sh
-bun install
-bun test
-bun run typecheck
-bun run build:release          # current host only
-bun run build:release:all      # all release assets
-bun run build:release -- linux-x64
+bun install --frozen-lockfile
+cargo test --locked
+cargo check --all-targets --locked
+cargo build --release --locked
+cargo build --release --locked --target x86_64-pc-windows-msvc
 ```
+
+Release asset renaming happens in GitHub Actions; there is no repo-local build script.
 
 Releases are automatic on `main`. Use Conventional Commits:
 

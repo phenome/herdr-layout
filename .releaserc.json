@@ -6,11 +6,11 @@
     "@semantic-release/release-notes-generator",
     "@semantic-release/changelog",
     ["@semantic-release/npm", { "npmPublish": false }],
-    ["@semantic-release/exec", { "prepareCmd": "bun scripts/sync-manifest-version.ts ${nextRelease.version}" }],
+    ["@semantic-release/exec", { "prepareCmd": "bun scripts/sync-manifest-version.ts ${nextRelease.version} && cargo generate-lockfile" }],
     [
       "@semantic-release/git",
       {
-        "assets": ["CHANGELOG.md", "package.json", "herdr-plugin.toml"],
+        "assets": ["CHANGELOG.md", "package.json", "herdr-plugin.toml", "Cargo.toml", "Cargo.lock", "bun.lock"],
         "message": "chore(release): v${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
       }
     ],

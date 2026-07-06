@@ -26,6 +26,7 @@ fi
 url="https://github.com/phenome/herdr-layout/releases/download/v$version/$asset"
 bin_dir="$root_dir/bin"
 out="$bin_dir/herdr-layout"
+echo "Downloading Herdr Layout binary: $url"
 shim="$bin_dir/herdr-layout.cmd"
 mkdir -p "$bin_dir"
 
@@ -38,6 +39,7 @@ else
   exit 1
 fi
 
+echo "Installed Herdr Layout binary: $out"
 chmod +x "$out"
 cat > "$shim" <<'EOF'
 #!/usr/bin/env sh
