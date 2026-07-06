@@ -1,3 +1,10 @@
+# [0.1.0](https://github.com/phenome/herdr-layout/compare/v0.0.3...v0.1.0) (2026-07-06)
+
+
+### Features
+
+* port runtime to Rust ([6a87867](https://github.com/phenome/herdr-layout/commit/6a87867f4a51ebf53b49d695a5500cbe277d9426))
+
 ## [0.0.3](https://github.com/phenome/herdr-layout/compare/v0.0.2...v0.0.3) (2026-07-06)
 
 
