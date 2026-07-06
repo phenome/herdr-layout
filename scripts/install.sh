@@ -26,6 +26,7 @@ fi
 url="https://github.com/phenome/herdr-layout/releases/download/v$version/$asset"
 bin_dir="$root_dir/bin"
 out="$bin_dir/herdr-layout"
+shim="$bin_dir/herdr-layout.cmd"
 mkdir -p "$bin_dir"
 
 if command -v curl >/dev/null 2>&1; then
@@ -38,3 +39,8 @@ else
 fi
 
 chmod +x "$out"
+cat > "$shim" <<'EOF'
+#!/usr/bin/env sh
+exec "$(dirname "$0")/herdr-layout" "$@"
+EOF
+chmod +x "$shim"

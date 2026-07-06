@@ -1,6 +1,6 @@
 id = "herdr-layout"
 name = "Herdr Layout"
-version = "0.0.2"
+version = "0.0.3"
 min_herdr_version = "0.7.0"
 platforms = ["windows", "macos", "linux"]
 
@@ -16,16 +16,16 @@ platforms = ["macos", "linux"]
 id = "apply-1"
 title = "Apply Layout 1"
 contexts = ["workspace"]
-command = ["bin/herdr-layout", "1"]
+command = ["bin/herdr-layout.cmd", "1"]
 
 [[actions]]
 id = "apply-2"
 title = "Apply Layout 2"
 contexts = ["workspace"]
-command = ["bin/herdr-layout", "2"]
+command = ["bin/herdr-layout.cmd", "2"]
 
 [[actions]]
 id = "apply-3"
 title = "Apply Layout 3"
 contexts = ["workspace"]
-command = ["bin/herdr-layout", "3"]
+command = ["bin/herdr-layout.cmd", "3"]

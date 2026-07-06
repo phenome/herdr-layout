@@ -13,6 +13,9 @@ $Asset = "herdr-layout-windows-x64.exe"
 $Url = "https://github.com/phenome/herdr-layout/releases/download/v$Version/$Asset"
 $BinDir = Join-Path $Root "bin"
 $Out = Join-Path $BinDir "herdr-layout.exe"
+$Shim = Join-Path $BinDir "herdr-layout.cmd"
 
 New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
 Invoke-WebRequest -Uri $Url -OutFile $Out
+Set-Content -Path $Shim -Encoding ASCII -Value '@echo off
+"%~dp0herdr-layout.exe" %*'

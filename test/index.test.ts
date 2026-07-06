@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { isIdle, isTargetRunning, planLayout, selectLayout, validateConfigRoot } from "../src/index.ts";
 import type { Layout, LayoutTarget, PaneInfo, PaneProcess, PaneProcessInfo, Snapshot, TabInfo } from "../src/index.ts";
 
@@ -140,5 +141,25 @@ describe("runtime planning helpers", () => {
         snapshot(tabs, panes, processes(["p-idle", [{ name: "node" }]], ["p-running", [{ name: "python" }]])),
       ),
     ).toThrow(/no matching or idle pane is available/);
+  });
+});
+
+describe("plugin packaging", () => {
+  test("manifest actions use cross-platform cmd wrapper", () => {
+    const manifest = readFileSync("herdr-plugin.toml", "utf8");
+    const commands = [...manifest.matchAll(/command = \["([^"]+)", "([123])"\]/g)];
+    expect(commands).toHaveLength(3);
+    expect(commands.map((match) => match[1])).toEqual([
+      "bin/herdr-layout.cmd",
+      "bin/herdr-layout.cmd",
+      "bin/herdr-layout.cmd",
+    ]);
+  });
+
+  test("install scripts create platform wrappers for the manifest command", () => {
+    expect(readFileSync("scripts/install.ps1", "utf8")).toContain("herdr-layout.cmd");
+    expect(readFileSync("scripts/install.ps1", "utf8")).toContain("%~dp0herdr-layout.exe");
+    expect(readFileSync("scripts/install.sh", "utf8")).toContain("herdr-layout.cmd");
+    expect(readFileSync("scripts/install.sh", "utf8")).toContain('exec \"$(dirname \"$0\")/herdr-layout\" \"$@\"');
   });
 });
