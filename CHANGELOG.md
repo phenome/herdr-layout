@@ -1,3 +1,10 @@
+## [0.1.2](https://github.com/phenome/herdr-layout/compare/v0.1.1...v0.1.2) (2026-07-06)
+
+
+### Bug Fixes
+
+* retry transient Herdr CLI pipe failures ([1867569](https://github.com/phenome/herdr-layout/commit/18675694446e80fbbafb1fa44839b1de3b0faa27))
+
 ## [0.1.1](https://github.com/phenome/herdr-layout/compare/v0.1.0...v0.1.1) (2026-07-06)
 
 
