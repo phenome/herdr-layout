@@ -1,3 +1,10 @@
+## [0.1.3](https://github.com/phenome/herdr-layout/compare/v0.1.2...v0.1.3) (2026-07-08)
+
+
+### Bug Fixes
+
+* avoid rerunning already labeled tabs ([b209aee](https://github.com/phenome/herdr-layout/commit/b209aee719c067d93dd6427669c911f59468003b))
+
 ## [0.1.2](https://github.com/phenome/herdr-layout/compare/v0.1.1...v0.1.2) (2026-07-06)
 
 
