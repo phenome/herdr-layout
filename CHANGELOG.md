@@ -1,3 +1,10 @@
+## [0.1.4](https://github.com/phenome/herdr-layout/compare/v0.1.3...v0.1.4) (2026-07-08)
+
+
+### Bug Fixes
+
+* relaunch labeled tabs at shell prompt ([0450bf5](https://github.com/phenome/herdr-layout/commit/0450bf58f1fc0525de6d9ceb630256c89d63e323))
+
 ## [0.1.3](https://github.com/phenome/herdr-layout/compare/v0.1.2...v0.1.3) (2026-07-08)
 
 
