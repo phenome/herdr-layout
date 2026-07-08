@@ -68,6 +68,7 @@ pub struct Snapshot {
     pub tabs: Vec<TabInfo>,
     pub panes: Vec<PaneInfo>,
     pub processes: HashMap<String, PaneProcessInfo>,
+    pub pane_text: HashMap<String, String>,
     pub current_pane: Option<PaneInfo>,
     pub original_tab_id: Option<String>,
     pub workspace_id: Option<String>,
@@ -383,6 +384,18 @@ fn read_snapshot(context: &PluginContext) -> AppResult<Snapshot> {
         processes.insert(pane.pane_id.clone(), info);
     }
 
+    let mut pane_text = HashMap::new();
+    for pane in &panes {
+        if is_idle(pane, &processes) {
+            match herdr(&["pane", "read", &pane.pane_id, "--source", "visible", "--lines", "5", "--format", "text"], false) {
+                Ok(text) => {
+                    pane_text.insert(pane.pane_id.clone(), text);
+                }
+                Err(error) => log_line(&format!("pane read failed for {}: {error}; treating matching label as running", pane.pane_id)),
+            }
+        }
+    }
+
     let current_pane = panes
         .iter()
         .find(|pane| Some(pane.pane_id.as_str()) == context.focused_pane_id.as_deref())
@@ -409,7 +422,7 @@ fn read_snapshot(context: &PluginContext) -> AppResult<Snapshot> {
                 .and_then(|id| tabs.iter().find(|tab| tab.tab_id == id).map(|tab| tab.workspace_id.clone()))
         });
 
-    Ok(Snapshot { tabs, panes, processes, current_pane, original_tab_id, workspace_id, active_cwd })
+    Ok(Snapshot { tabs, panes, processes, pane_text, current_pane, original_tab_id, workspace_id, active_cwd })
 }
 
 pub fn plan_layout(layout: &Layout, snapshot: &Snapshot) -> AppResult<Vec<Operation>> {
@@ -430,7 +443,7 @@ pub fn plan_layout(layout: &Layout, snapshot: &Snapshot) -> AppResult<Vec<Operat
                 }
 
                 if is_idle(current, &snapshot.processes) {
-                    let planned = plan_target(target, &tabs, &snapshot.panes, &snapshot.processes, &mut assigned)?;
+                    let planned = plan_target(target, &tabs, &snapshot.panes, &snapshot.processes, &snapshot.pane_text, &mut assigned)?;
                     if !matches!(planned, Operation::CreateTab { .. }) {
                         operations.push(planned);
                         continue;
@@ -445,7 +458,7 @@ pub fn plan_layout(layout: &Layout, snapshot: &Snapshot) -> AppResult<Vec<Operat
                 }
             }
         }
-        operations.push(plan_target(target, &tabs, &snapshot.panes, &snapshot.processes, &mut assigned)?);
+        operations.push(plan_target(target, &tabs, &snapshot.panes, &snapshot.processes, &snapshot.pane_text, &mut assigned)?);
     }
 
     Ok(operations)
@@ -456,6 +469,7 @@ pub fn plan_target(
     tabs: &[TabInfo],
     panes: &[PaneInfo],
     processes: &HashMap<String, PaneProcessInfo>,
+    pane_text: &HashMap<String, String>,
     assigned: &mut HashSet<String>,
 ) -> AppResult<Operation> {
     let matching_tabs: Vec<&TabInfo> = tabs.iter().filter(|tab| tab.label == target.label).collect();
@@ -471,18 +485,24 @@ pub fn plan_target(
     }
 
     for tab in &matching_tabs {
+        if let Some(pane) = panes.iter().find(|pane| {
+            pane.tab_id == tab.tab_id
+                && !assigned.contains(&pane.pane_id)
+                && is_idle(pane, processes)
+                && pane_text.get(&pane.pane_id).is_some_and(|text| looks_like_shell_prompt(text))
+        }) {
+            assigned.insert(pane.pane_id.clone());
+            return Ok(Operation::RunExisting { target: target.clone(), pane_id: pane.pane_id.clone(), tab_id: tab.tab_id.clone() });
+        }
+    }
+
+    for tab in &matching_tabs {
         if let Some(pane) = panes.iter().find(|pane| pane.tab_id == tab.tab_id && !assigned.contains(&pane.pane_id)) {
             assigned.insert(pane.pane_id.clone());
             return Ok(Operation::AlreadyRunning { label: target.label.clone(), pane_id: pane.pane_id.clone(), tab_id: tab.tab_id.clone() });
         }
     }
 
-    for tab in &matching_tabs {
-        if let Some(pane) = panes.iter().find(|pane| pane.tab_id == tab.tab_id && !assigned.contains(&pane.pane_id) && is_idle(pane, processes)) {
-            assigned.insert(pane.pane_id.clone());
-            return Ok(Operation::RunExisting { target: target.clone(), pane_id: pane.pane_id.clone(), tab_id: tab.tab_id.clone() });
-        }
-    }
 
     Err(format!("Tab \"{}\" exists, but no matching or idle pane is available", target.label))
 }
@@ -530,6 +550,17 @@ pub fn is_idle(pane: &PaneInfo, processes: &HashMap<String, PaneProcessInfo>) ->
         && foreground
             .iter()
             .all(|process| SHELLS.contains(&normalize_name(process.argv0.as_deref().or(Some(&process.name))).as_str()))
+}
+
+pub fn looks_like_shell_prompt(text: &str) -> bool {
+    let Some(line) = text.lines().rev().map(str::trim).find(|line| !line.is_empty()) else {
+        return false;
+    };
+
+    matches!(line, "❯" | ">" | "$" | "%" | "#" | "λ")
+        || line.starts_with("PS ") && line.ends_with('>')
+        || (line.ends_with('>') && (line.contains(":\\") || line.contains(":/")))
+        || [" ❯", " $", " #", " %", " λ"].iter().any(|suffix| line.ends_with(suffix))
 }
 
 pub fn command_name(command: &str) -> String {
@@ -838,11 +869,23 @@ mod tests {
             tabs,
             panes,
             processes: process_map,
+            pane_text: HashMap::new(),
             current_pane,
             original_tab_id: None,
             workspace_id: None,
             active_cwd: "/repo".to_string(),
         }
+    }
+    fn snapshot_with_pane_text(
+        tabs: Vec<TabInfo>,
+        panes: Vec<PaneInfo>,
+        process_map: HashMap<String, PaneProcessInfo>,
+        current_pane: Option<PaneInfo>,
+        visible_text: &[(&str, &str)],
+    ) -> Snapshot {
+        let mut snapshot = snapshot(tabs, panes, process_map, current_pane);
+        snapshot.pane_text = visible_text.iter().map(|(pane_id, text)| ((*pane_id).to_string(), (*text).to_string())).collect();
+        snapshot
     }
 
     fn yaml(raw: &str) -> YamlValue {
@@ -1036,7 +1079,29 @@ layouts:
     }
 
     #[test]
-    fn matching_label_shell_foreground_is_noop_to_avoid_tui_keystrokes() {
+    fn matching_label_shell_prompt_after_quitting_yazi_relaunches() {
+        let desired = target("files", "yazi");
+        let tabs = vec![tab("t-files", "files")];
+        let panes = vec![pane("p-files", "t-files")];
+
+        assert_eq!(
+            plan_layout(
+                &layout(vec![desired.clone()]),
+                &snapshot_with_pane_text(
+                    tabs,
+                    panes,
+                    processes(&[("p-files", vec![process("pwsh")])]),
+                    None,
+                    &[("p-files", "repo\n❯")],
+                ),
+            )
+            .unwrap(),
+            vec![Operation::RunExisting { target: desired, pane_id: "p-files".to_string(), tab_id: "t-files".to_string() }],
+        );
+    }
+
+    #[test]
+    fn matching_label_shell_tui_without_child_process_is_noop_to_avoid_keystrokes() {
         let desired = target("files", "yazi");
         let tabs = vec![tab("t-files", "files")];
         let panes = vec![pane("p-files", "t-files")];
@@ -1044,7 +1109,13 @@ layouts:
         assert_eq!(
             plan_layout(
                 &layout(vec![desired]),
-                &snapshot(tabs, panes, processes(&[("p-files", vec![process("pwsh")])]), None),
+                &snapshot_with_pane_text(
+                    tabs,
+                    panes,
+                    processes(&[("p-files", vec![process("pwsh")])]),
+                    None,
+                    &[("p-files", "yazi 0.4.0\nsrc/main.rs\nCargo.toml")],
+                ),
             )
             .unwrap(),
             vec![Operation::AlreadyRunning { label: "files".to_string(), pane_id: "p-files".to_string(), tab_id: "t-files".to_string() }],
