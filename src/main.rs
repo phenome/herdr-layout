@@ -471,6 +471,13 @@ pub fn plan_target(
     }
 
     for tab in &matching_tabs {
+        if let Some(pane) = panes.iter().find(|pane| pane.tab_id == tab.tab_id && !assigned.contains(&pane.pane_id)) {
+            assigned.insert(pane.pane_id.clone());
+            return Ok(Operation::AlreadyRunning { label: target.label.clone(), pane_id: pane.pane_id.clone(), tab_id: tab.tab_id.clone() });
+        }
+    }
+
+    for tab in &matching_tabs {
         if let Some(pane) = panes.iter().find(|pane| pane.tab_id == tab.tab_id && !assigned.contains(&pane.pane_id) && is_idle(pane, processes)) {
             assigned.insert(pane.pane_id.clone());
             return Ok(Operation::RunExisting { target: target.clone(), pane_id: pane.pane_id.clone(), tab_id: tab.tab_id.clone() });
@@ -1029,6 +1036,22 @@ layouts:
     }
 
     #[test]
+    fn matching_label_shell_foreground_is_noop_to_avoid_tui_keystrokes() {
+        let desired = target("files", "yazi");
+        let tabs = vec![tab("t-files", "files")];
+        let panes = vec![pane("p-files", "t-files")];
+
+        assert_eq!(
+            plan_layout(
+                &layout(vec![desired]),
+                &snapshot(tabs, panes, processes(&[("p-files", vec![process("pwsh")])]), None),
+            )
+            .unwrap(),
+            vec![Operation::AlreadyRunning { label: "files".to_string(), pane_id: "p-files".to_string(), tab_id: "t-files".to_string() }],
+        );
+    }
+
+    #[test]
     fn duplicate_target_tabs_prefer_running_then_idle_then_error() {
         let desired = target("api", "api --serve");
         let tabs = vec![tab("t-idle", "api"), tab("t-running", "api")];
@@ -1060,15 +1083,17 @@ layouts:
                 ),
             )
             .unwrap(),
-            vec![Operation::RunExisting { target: desired.clone(), pane_id: "p-idle".to_string(), tab_id: "t-idle".to_string() }],
+            vec![Operation::AlreadyRunning { label: "api".to_string(), pane_id: "p-idle".to_string(), tab_id: "t-idle".to_string() }],
         );
 
-        let error = plan_layout(
-            &layout(vec![desired]),
-            &snapshot(tabs, panes, processes(&[("p-idle", vec![process("node")]), ("p-running", vec![process("python")])]), None),
-        )
-        .unwrap_err();
-        assert!(error.contains("no matching or idle pane is available"), "{error}");
+        assert_eq!(
+            plan_layout(
+                &layout(vec![desired]),
+                &snapshot(tabs, panes, processes(&[("p-idle", vec![process("node")]), ("p-running", vec![process("python")])]), None),
+            )
+            .unwrap(),
+            vec![Operation::AlreadyRunning { label: "api".to_string(), pane_id: "p-idle".to_string(), tab_id: "t-idle".to_string() }],
+        );
     }
 
     #[test]
